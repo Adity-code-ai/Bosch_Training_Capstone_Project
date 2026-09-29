@@ -31,6 +31,18 @@ ALLOWED_TYPES = {
     "Determinism",
     "Immutability",
 }
+TYPE_ALIASES = {
+    "positive": "Positive",
+    "negative": "Negative",
+    "edge": "Edge",
+    "boundary": "Boundary",
+    "priority": "Priority",
+    "invalid input": "Invalid Input",
+    "stale input": "Stale Input",
+    "determinism": "Determinism",
+    "immutability": "Immutability",
+    "functional": "Positive",
+}
 ID_PATTERN = re.compile(r"LDM_TC_(\d{3})$")
 REQUIRED_REASONS = {
     "MitigationAllowed",
@@ -86,7 +98,8 @@ def main() -> int:
         else:
             ids.append(int(match.group(1)))
 
-        testcase_type = row.get("testcase type", "")
+        raw_testcase_type = row.get("testcase type", "").strip()
+        testcase_type = TYPE_ALIASES.get(raw_testcase_type.lower(), raw_testcase_type)
         types.add(testcase_type)
         if testcase_type not in ALLOWED_TYPES:
             errors.append(f"row {row_number}: unsupported testcase type {testcase_type!r}")

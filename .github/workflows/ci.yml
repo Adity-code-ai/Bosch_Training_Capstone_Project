@@ -7,14 +7,13 @@ on:
 permissions:
   contents: read
 
-defaults:
-  run:
-    working-directory: Github_Copilot_Deep_Dive
-
 jobs:
   cpp:
     name: C++ build, test, and lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Github_Copilot_Deep_Dive
 
     steps:
       - name: Check out repository
@@ -47,6 +46,9 @@ jobs:
   python:
     name: Python tools and test-design validation
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Github_Copilot_Deep_Dive
 
     steps:
       - name: Check out repository

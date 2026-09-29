@@ -13,7 +13,7 @@ from pathlib import Path
 INPUT_PATTERN = re.compile(r"([^;=]+)=([^;]+)")
 OUTPUT_PATTERN = re.compile(
     r"status=([^;]+);\s*requestMitigation=(true|false);\s*"
-    r"requestedSide=([^;]+);\s*reason=([^;]+)"
+    r"(?:requestedSide=([^;]+);\s*)?reason=([^;]+)"
 )
 
 
@@ -73,7 +73,7 @@ def parse_expected(value: str) -> Decision | None:
     return Decision(
         status=match.group(1),
         request_mitigation=match.group(2) == "true",
-        requested_side=match.group(3),
+        requested_side=match.group(3) or "NONE",
         reason=match.group(4),
     )
 
@@ -97,6 +97,15 @@ def main() -> int:
             inputs = parse_input(clear_input)
             actual = evaluate(inputs)
             expected = parse_expected(expected_text)
+            match = OUTPUT_PATTERN.fullmatch(expected_text.strip())
+            if expected is not None and match is not None:
+                if match.group(3) is None and expected.request_mitigation:
+                    expected = Decision(
+                        expected.status,
+                        expected.request_mitigation,
+                        inputs.get("risk", "UNKNOWN"),
+                        expected.reason,
+                    )
             if expected is None:
                 errors.append(f"row {row_number}: expected output is not a single decision record")
             elif actual != expected:

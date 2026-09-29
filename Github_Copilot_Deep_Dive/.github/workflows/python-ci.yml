@@ -1,0 +1,57 @@
+name: Python CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-ldm-tools:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile Python scripts
+        run: |
+          python -m py_compile .github/skills/ut-test-design/scripts/*.py
+
+      - name: Validate test-design CSV
+        run: |
+          python .github/skills/ut-test-design/scripts/validate_csv.py \
+            docs/ut-test-design/ldm-ut-test-design.csv
+          python .github/skills/ut-test-design/scripts/test_validation.py \
+            docs/ut-test-design/ldm-ut-test-design.csv
+
+      - name: Review test cases
+        run: |
+          python .github/skills/ut-test-design/scripts/review_tests.py \
+            docs/ut-test-design/ldm-ut-test-design.csv \
+            --output review-findings.json
+
+      - name: Generate findings report
+        run: |
+          python .github/skills/ut-test-design/scripts/generate_findings_csv.py \
+            review-findings.json review-findings.csv
+
+      - name: Apply safe fixes to a separate output
+        run: |
+          python .github/skills/ut-test-design/scripts/fix_review_findings.py \
+            docs/ut-test-design/ldm-ut-test-design.csv \
+            review-findings.csv \
+            ldm-ut-test-design-fixed.csv
+
+      - name: Validate fixed output
+        run: |
+          python .github/skills/ut-test-design/scripts/validate_csv.py \
+            ldm-ut-test-design-fixed.csv
+          python .github/skills/ut-test-design/scripts/test_validation.py \
+            ldm-ut-test-design-fixed.csv

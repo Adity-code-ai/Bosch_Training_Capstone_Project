@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: Github_Copilot_Deep_Dive
+
+jobs:
+  cpp:
+    name: C++ build, test, and lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install C++ tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y cmake ninja-build clang-format
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Check C++ formatting
+        shell: bash
+        run: |
+          mapfile -t files < <(find include src tests -type f \( -name '*.hpp' -o -name '*.cpp' \) -print)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No C++ files found to lint."
+            exit 0
+          fi
+          clang-format --dry-run --Werror "${files[@]}"
+
+  python:
+    name: Python tools and test-design validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile Python scripts
+        run: python -m py_compile .github/skills/ut-test-design/scripts/*.py
+
+      - name: Validate source test-design CSV
+        run: |
+          python .github/skills/ut-test-design/scripts/validate_csv.py \
+            docs/ut-test-design/ldm-ut-test-design.csv
+          python .github/skills/ut-test-design/scripts/test_validation.py \
+            docs/ut-test-design/ldm-ut-test-design.csv
+
+      - name: Review test cases
+        run: |
+          python .github/skills/ut-test-design/scripts/review_tests.py \
+            docs/ut-test-design/ldm-ut-test-design.csv \
+            --output review-findings.json
+
+      - name: Generate findings report
+        run: |
+          python .github/skills/ut-test-design/scripts/generate_findings_csv.py \
+            review-findings.json review-findings.csv
+
+      - name: Apply safe fixes to separate output
+        run: |
+          python .github/skills/ut-test-design/scripts/fix_review_findings.py \
+            docs/ut-test-design/ldm-ut-test-design.csv \
+            review-findings.csv \
+            ldm-ut-test-design-fixed.csv
+
+      - name: Validate fixed test-design CSV
+        run: |
+          python .github/skills/ut-test-design/scripts/validate_csv.py \
+            ldm-ut-test-design-fixed.csv
+          python .github/skills/ut-test-design/scripts/test_validation.py \
+            ldm-ut-test-design-fixed.csv
+
+      - name: Upload review reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ldm-test-review-reports
+          path: |
+            Github_Copilot_Deep_Dive/review-findings.json
+            Github_Copilot_Deep_Dive/review-findings.csv
+            Github_Copilot_Deep_Dive/ldm-ut-test-design-fixed.csv
+          if-no-files-found: ignore
+
+  ci-status:
+    name: CI status
+    if: always()
+    needs: [cpp, python]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require all CI jobs to pass
+        run: |
+          if [ "${{ needs.cpp.result }}" != "success" ] || [ "${{ needs.python.result }}" != "success" ]; then
+            echo "C++ result: ${{ needs.cpp.result }}"
+            echo "Python result: ${{ needs.python.result }}"
+            exit 1
+          fi
+          echo "C++ and Python CI jobs passed."
